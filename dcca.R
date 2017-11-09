@@ -110,6 +110,9 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     data_shape_A <- c(ncol(x),batch_size)
                     data_shape_B <- c(ncol(y),batch_size)
                     
+                    reinit_n = 1; reinit_Max=0;
+                   
+                    while(reinit_n<100 & (reinit_Max<1e5 | is.nan(reinit_Max))){
                     set.seed(seed)
                     initializer<- do.call(f_init,arg_initializer)
                     arg_param_ini_E<- mx.init.create(initializer = initializer, shape.array = mx.symbol.infer.shape(E, X=data_shape_A,Y=data_shape_B)$arg.shapes, ctx = devices)
@@ -120,14 +123,14 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                         tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
                         tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
                         tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
-                        arg_param_ini_E[[i]] <- mx.nd.array(tmpd)
+                        arg_param_ini_E[[i]] <- mx.nd.array(tmpd/reinit_n)
                     }
                     for(i in names(aux_param_ini_E)){
                         tmpd <- as.array(aux_param_ini_E[[i]])
                         tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
                         tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
                         tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
-                        aux_param_ini_E[[i]] <- mx.nd.array(tmpd)
+                        aux_param_ini_E[[i]] <- mx.nd.array(tmpd/reinit_n)
                     }
 
                     exec_E<- mx.simple.bind(symbol = E, X=data_shape_A,Y=data_shape_B, ctx = devices, grad.req = "write",fixed.param=c("X","Y"))
@@ -145,7 +148,11 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     mx.exec.update.arg.arrays(exec_E, arg.arrays = list(X=a, Y=b), match.name=TRUE)
                     
                     mx.exec.forward(exec_E, is.train=T)
-
+                    mx.exec.update.arg.arrays(exec_C, exec_E$arg.arrays[names(exec_C$arg.arrays)[-1]], match.name=TRUE)
+                    mx.exec.update.arg.arrays(exec_D, exec_E$arg.arrays[names(exec_D$arg.arrays)[-1]], match.name=TRUE)
+                    reinit_Max = max(abs(as.numeric(cbind(t(as.array(exec_C$outputs[[1]])),t(as.array(exec_D$outputs[[1]]))))))
+                    reinit_n = reinit_n+1
+                    }
                     optimizer_E<-do.call("mx.opt.create",arg_optimizer)
                     
                     updater_E<- mx.opt.get.updater(optimizer = optimizer_E, weights = exec_E$ref.arg.arrays)
@@ -194,7 +201,7 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                                     tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
                                     tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
                                     arg_param_ini_E[[i]] <- mx.nd.array(tmpd)
-                                    print("WARN: NAN output, re-initializing weights; Please consider initialize function or network structure!")
+                                    print("WARN: NAN output, re-initializing weights; Please rescale your data, modify initialize function or network structure!")
                             
                             }
                             rm(exec_E)
