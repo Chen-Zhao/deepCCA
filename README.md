@@ -1,7 +1,7 @@
 # deepCCA
 deep correlation in R
 
-Max correlation to maximize deep neural network projected vectors.
+Max correlation to minimize distance between deep neural network projected vectors.
 
 
 
