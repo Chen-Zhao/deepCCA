@@ -23,7 +23,7 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     nit = 5000,
                     track_nit = 50,
                     plotit=TRUE,col=NULL,
-                    printit=TRUE,
+                    printit=TRUE,plotit_y=FALSE,
                     seed=123456
                     ){
                     require(mxnet)
@@ -123,14 +123,14 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                         tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
                         tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
                         tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
-                        arg_param_ini_E[[i]] <- mx.nd.array(tmpd/reinit_n)
+                        arg_param_ini_E[[i]] <- mx.nd.array(tmpd)
                     }
                     for(i in names(aux_param_ini_E)){
                         tmpd <- as.array(aux_param_ini_E[[i]])
                         tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
                         tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
                         tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
-                        aux_param_ini_E[[i]] <- mx.nd.array(tmpd/reinit_n)
+                        aux_param_ini_E[[i]] <- mx.nd.array(tmpd)
                     }
 
                     exec_E<- mx.simple.bind(symbol = E, X=data_shape_A,Y=data_shape_B, ctx = devices, grad.req = "write",fixed.param=c("X","Y"))
@@ -167,7 +167,11 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     
                     track = numeric()
                     
-                    for(i in 1:nit){
+                    reinit_n = 1;
+                    
+                    i=0; reinit_Max=100;
+                    while(i <= nit){
+                        i=i+1;
                         mx.exec.backward(exec_E)
                         update_args_E_OD <- exec_E$arg.arrays
                         output_OD <- as.array(exec_E$outputs[[1]])
@@ -192,7 +196,7 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                         #    mx.exec.forward(exec_E, is.train=T)
                         #}
                         
-                        if(is.nan(sum(as.numeric(as.array(exec_E$outputs[[1]]))))){
+                        if((is.nan(sum(as.numeric(as.array(exec_E$outputs[[1]])))) | reinit_Max<1 | reinit_Max>1e5)){
                             initializer<- do.call(f_init,arg_initializer)
                             arg_param_ini_E<- mx.init.create(initializer = initializer, shape.array = mx.symbol.infer.shape(E, X=data_shape_A,Y=data_shape_B)$arg.shapes, ctx = devices)
                             for(i in names(arg_param_ini_E)){
@@ -211,7 +215,10 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                             mx.exec.forward(exec_E, is.train=T)
                             optimizer_E<-do.call("mx.opt.create",arg_optimizer)
                             updater_E<- mx.opt.get.updater(optimizer = optimizer_E, weights = exec_E$ref.arg.arrays)
-
+                            reinit_n = reinit_n+1;
+                            if(reinit_n<=100){
+                                 i=i*0.5;
+                            }
                         }
                         
                         if (printit) print( c(sum(as.array(exec_E$outputs[[1]])),cor_f(exec_E,exec_C,exec_D)))
@@ -219,8 +226,11 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                         #exec_E$arg.arrays[c(2,5)]
                         if(i%%track_nit==0){
                             track <- rbind(track,c(i,cor_f(exec_E,exec_C,exec_D)))
-                            if(plotit) plot(t(as.array(exec_C$outputs[[1]])),y,col=col,pch=19,cex=0.5,xlab="deep(X)",ylab="y")
+                            if(plotit) plot(t(as.array(exec_C$outputs[[1]])),t(as.array(exec_D$outputs[[1]])),col=col,pch=19,cex=0.5,xlab="deep(X)",ylab="deep(y)")
+                            if(plotit_y) plot(t(as.array(exec_C$outputs[[1]])),y,col=col,pch=19,cex=0.5,xlab="deep(X)",ylab="y")
+                            reinit_Max = max(abs(as.numeric(cbind(t(as.array(exec_C$outputs[[1]])),t(as.array(exec_D$outputs[[1]]))))))
                         }
+                        
                     }
                     mx.exec.update.arg.arrays(exec_C, exec_E$arg.arrays[names(exec_C$arg.arrays)[-1]], match.name=TRUE)
                     mx.exec.update.arg.arrays(exec_D, exec_E$arg.arrays[names(exec_D$arg.arrays)[-1]], match.name=TRUE)
