@@ -132,6 +132,16 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                         tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
                         aux_param_ini_E[[i]] <- mx.nd.array(tmpd)
                     }
+                    if(reinit_n==99)
+                    {
+                        for(i in names(arg_param_ini_E)){
+                            tmpd <- as.array(arg_param_ini_E[[i]])
+                            tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
+                            tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
+                            tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
+                            arg_param_ini_E[[i]] <- mx.nd.array(tmpd-tmpd+0.5)
+                        }
+                    }
 
                     exec_E<- mx.simple.bind(symbol = E, X=data_shape_A,Y=data_shape_B, ctx = devices, grad.req = "write",fixed.param=c("X","Y"))
                     exec_C<- mx.simple.bind(symbol = C, X=data_shape_A, ctx = devices, grad.req = "write",fixed.param=c("X"))
@@ -169,9 +179,9 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     
                     reinit_n = 1;
                     
-                    i=0; reinit_Max=100;
-                    while(i <= nit){
-                        i=i+1;
+                    iiiii=0; reinit_Max=100;
+                    while(iiiii <= nit){
+                        iiiii=iiiii+1;
                         mx.exec.backward(exec_E)
                         update_args_E_OD <- exec_E$arg.arrays
                         output_OD <- as.array(exec_E$outputs[[1]])
@@ -208,6 +218,16 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                                     print("WARN: NAN output, re-initializing weights; Please rescale your data, modify initialize function or network structure!")
                             
                             }
+                            if(reinit_n==99)
+                            {
+                                for(i in names(arg_param_ini_E)){
+                                    tmpd <- as.array(arg_param_ini_E[[i]])
+                                    tmpd[is.nan(tmpd)] <- sample(c(-1,1),sum(is.nan(tmpd)),replace=T)*runif(sum(is.nan(tmpd)),0.5,3);
+                                    tmpd[tmpd>1e2] <- sample(c(-1,1),sum(tmpd>1e2),replace=T)*runif(sum(tmpd>1e2),0.5,3);
+                                    tmpd[abs(tmpd)<1e-2] <- sample(c(-1,1),sum(abs(tmpd)<1e-2),replace=T)*runif(sum(abs(tmpd)<1e-2),0.5,3);
+                                    arg_param_ini_E[[i]] <- mx.nd.array(tmpd-tmpd+0.5)
+                                }
+                            }
                             rm(exec_E)
                             exec_E<- mx.simple.bind(symbol = E, X=data_shape_A,Y=data_shape_B, ctx = devices, grad.req = "write",fixed.param=c("X","Y"))
                             mx.exec.update.arg.arrays(exec_E, arg_param_ini_E, match.name=TRUE)
@@ -217,15 +237,16 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                             updater_E<- mx.opt.get.updater(optimizer = optimizer_E, weights = exec_E$ref.arg.arrays)
                             reinit_n = reinit_n+1;
                             if(reinit_n<=100){
-                                 i=i*0.5;
+                                print(iiiii)
+                                iiiii=ceiling(iiiii*0.5)
                             }
                         }
                         
                         if (printit) print( c(sum(as.array(exec_E$outputs[[1]])),cor_f(exec_E,exec_C,exec_D)))
                         #exec_E$outputs
                         #exec_E$arg.arrays[c(2,5)]
-                        if(i%%track_nit==0){
-                            track <- rbind(track,c(i,cor_f(exec_E,exec_C,exec_D)))
+                        if(iiiii%%track_nit==0){
+                            track <- rbind(track,c(iiiii,cor_f(exec_E,exec_C,exec_D)))
                             if(plotit) plot(t(as.array(exec_C$outputs[[1]])),t(as.array(exec_D$outputs[[1]])),col=col,pch=19,cex=0.5,xlab="deep(X)",ylab="deep(y)")
                             if(plotit_y) plot(t(as.array(exec_C$outputs[[1]])),y,col=col,pch=19,cex=0.5,xlab="deep(X)",ylab="y")
                             reinit_Max = max(abs(as.numeric(cbind(t(as.array(exec_C$outputs[[1]])),t(as.array(exec_D$outputs[[1]]))))))
