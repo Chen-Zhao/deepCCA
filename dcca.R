@@ -42,7 +42,7 @@ deepCCA <- function(x,y,devices=mx.cpu(),
                     
                     require(mxnet)
                     X = mx.symbol.Variable('X');
-                    if(NeuralNetworkY$nlayer==0){
+                    if(NeuralNetworkX$nlayer==0){
                         C <- mx.symbol.FullyConnected(xlayerslist[[NeuralNetworkX$nlayers*2]], num_hidden=1,name=paste0("X","L","F"));
                     }else{
                         xlayerslist <- list();
